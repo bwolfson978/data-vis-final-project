@@ -48,6 +48,7 @@ Design Option 1:
 ![design_one](img/design1.PNG)
 
 Design Option 2:
+
 ![design_two](img/design2.PNG)
 
 Design Option 3:
