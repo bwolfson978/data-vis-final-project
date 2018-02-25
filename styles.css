@@ -1,0 +1,25 @@
+#map {
+    height: 100%;
+    width: 100%;
+}
+.axis--grid .domain {
+    fill: #33afd9b0;
+    stroke: none;
+}
+
+.axis--x .domain,
+.axis--grid .tick line {
+    stroke: "steelblue";
+}
+
+.axis--grid .tick--minor line {
+    stroke-opacity: .5;
+}
+h1 {
+    text-align: center;
+}
+
+.bar text {
+    font: 10px sans-serif;
+    fill: #999999;
+}

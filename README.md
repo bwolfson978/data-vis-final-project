@@ -143,3 +143,13 @@ References
 ---
 
 - This final project is adapted from http://dataviscourse.net/2015/project/
+
+Sources
+---
+http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml
+https://bl.ocks.org/mbostock/6232537
+http://leafletjs.com/
+https://developers.google.com/maps/documentation/javascript/examples/place-search
+https://getbootstrap.com/
+
+

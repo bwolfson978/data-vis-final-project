@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="./papaparse.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css"
+          integrity="sha512-Rksm5RenBEKSKFjgI3a41vrjkw4EVPlJ3+OiI65vTjIdo9brlAacEuKOiQ5OFh7cOI1bkDwLqdLw3Zg0cRJAAQ=="
+          crossorigin=""/>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"
+            integrity="sha512-/Nsx9X4HebavoBvEBuyp3I7od5tA0UzAxs+j83KgC8PU0kgB4XiK4Lfe4y4cgBtaRJQEIFCW+oC506aPT2L1zw=="
+            crossorigin=""></script>
+    <script src="leaflet-heat.js"></script>
+</head>
+
+<body>
+<h1> NYC Taxi Rides </h1>
+<div id="gmap"></div>
+<div class="container-fluid">
+    <div class="row" style="padding-left: 30px;">
+        <div class="col-8">
+            <div id="map"></div>
+        </div>
+        <div class="col">
+            <table class="table table-bordered">
+                <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Top Pickup Locations</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <th scope="row">1</th>
+                    <td id="pu1"></td>
+                </tr>
+                <tr>
+                    <th scope="row">2</th>
+                    <td id="pu2"></td>
+                </tr>
+                <tr>
+                    <th scope="row">3</th>
+                    <td id="pu3"></td>
+                </tr>
+                </tbody>
+            </table>
+            <table class="table table-bordered">
+                <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Top Destinations</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <th scope="row">1</th>
+                    <td id="dest1"></td>
+                </tr>
+                <tr>
+                    <th scope="row">2</th>
+                    <td id="dest2"></td>
+                </tr>
+                <tr>
+                    <th scope="row">3</th>
+                    <td id="dest3"></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class = "row">
+        <div id="timeline"></div>
+    </div>
+    <div class = "row">
+        <div class="col">
+            <div id="histogram"></div>
+        </div>
+    </div>
+</div>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCw_Iz7GT1vARXvUJsC1ELZ3Iyz0fa1abA&libraries=places&callback=initialize" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+</body>
+
+<script>
+    // array of ride objects
+    var rides = [];
+    // array of all pickup and dropoff locations
+    var points = [];
+    var filteredPickupPoints = [];
+    var filteredDestinationPoints = [];
+    var histData = [];
+    var latitude = parseFloat("40.7128");
+    var longitude = parseFloat("-74.0059");
+    var mymap = L.map('map').setView([latitude, longitude], 12);
+    L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoiYmFycmV0dHdvbGZzb24iLCJhIjoiY2plMHVjejMwNXYxZTMzcWhkMGt6d3FnNCJ9.6z7LN6FGq91VStpgb9nytw', {
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+        maxZoom: 18,
+        id: 'mapbox.streets',
+        accessToken: 'pk.eyJ1IjoiYmFycmV0dHdvbGZzb24iLCJhIjoiY2plMHVjejMwNXYxZTMzcWhkMGt6d3FnNCJ9.6z7LN6FGq91VStpgb9nytw'
+    }).addTo(mymap);
+    var markers = [];
+
+    //hidden gmaps data to use places API
+    var gmap;
+    var service;
+    var firstLandmark = "";
+    var secondLandmark = "";
+    var thirdLandmark = "";
+
+    // read in csv taxi data
+    var data = "10k-data.csv";
+    $.get(data, function(data){
+        Papa.parse(data, {
+            dynamicTyping: true,
+            header: true,
+            complete: function(results, file){
+                console.log("parsing complete:", results, file);
+                results.data.forEach(function(ride){
+                    rides.push(ride);
+                    var puLat = ride.pickup_latitude;
+                    var puLon = ride.pickup_longitude;
+                    var doLat = ride.dropoff_latitude;
+                    var doLon = ride.dropoff_longitude;
+                    if(puLat != null && puLon != null){
+                        var pickup_loc = [puLat, puLon];
+                        points.push(pickup_loc);
+                    }
+                    if(doLat != null && doLon != null){
+                        var dropoff_loc = [doLat, doLon];
+                        points.push(dropoff_loc);
+                    }
+                    var hour = new Date(ride.tpep_pickup_datetime).getHours();
+                    histData.push(hour);
+                });
+                var heat = L.heatLayer(points, {radius: 15}).addTo(mymap);
+                drawHistogram();
+            }
+        });
+    });
+
+    //d3 features
+    var margin = {top: 200, right: 40, bottom: 200, left: 40},
+        width = 1200 - margin.left - margin.right,
+        height = 680 - margin.top - margin.bottom;
+    var svg; //svg used by timeline
+    var svg2; //svg used by histogram
+
+    var x = d3.scaleTime()
+        .domain([new Date(2015, 0, 1), new Date(2015, 0, 31) - 1])
+        .rangeRound([0, width]);
+
+    var dispatch = d3.dispatch("statechange");
+
+    var brushWindowStart = "";
+    var brushWindowEnd = "";
+
+    drawTimeline();
+
+    function drawTimeline(){
+        svg = d3.select("#timeline").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", 120)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + (40) + ")");
+
+        svg.append("g")
+            .attr("class", "axis axis--grid")
+            .attr("transform", "translate(0," + (35) + ")")
+            .call(d3.axisBottom(x)
+                .ticks(d3.timeHour, 12)
+                .tickSize(-height/8)
+                .tickFormat(function() { return null; }))
+            .selectAll(".tick")
+            .classed("tick--minor", function(d) { return d.getHours(); });
+
+        svg.append("g")
+            .attr("class", "axis axis--x")
+            .attr("transform", "translate(0," + (35) + ")")
+            .call(d3.axisBottom(x)
+                .ticks(d3.timeDay)
+                .tickPadding(0))
+            .selectAll("text")
+            .attr("x", 6);
+
+        drawRangeLabels();
+        svg.append("g")
+            .attr("class", "brush")
+            .call(d3.brushX()
+                .extent([[0, 0], [width, height/8]])
+                .on("end", brushended));
+    }
+
+    function drawHistogram(){
+        var height = 380;
+        var width = 1200;
+        var color = "steelblue";
+        var formatCount = d3.format(",.0f");
+        var max = d3.max(histData);
+        var min = d3.min(histData);
+        console.log("min: " + min);
+        console.log("max: " + max);
+        console.log(width);
+        var x = d3.scaleLinear()
+            .domain([min, max + 1])
+            .range([0, width/2]);
+
+        // Generate a histogram using twenty-four uniformly-spaced bins.
+        var data = d3.histogram()
+            .domain(x.domain())
+            .thresholds(x.ticks(24))
+            (histData);
+
+        console.log(data);
+
+        var yMax = d3.max(data, function(d){return d.length});
+        var yMin = d3.min(data, function(d){return d.length});
+        var colorScale = d3.scaleLinear()
+            .domain([yMin, yMax])
+            .range([d3.rgb(color).brighter(), d3.rgb(color).darker()]);
+
+        var y = d3.scaleLinear()
+            .domain([0, yMax])
+            .range([height, 50]);
+
+        svg2 = d3.select("#histogram").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", "translate(" + 20 + "," + 0 + ")");
+
+        var bar = svg2.selectAll(".bar")
+            .data(data)
+            .enter().append("g")
+            .attr("class", "bar")
+            .attr("transform", function(d) { return "translate(" + x(d.x0) + "," + y(d.length) + ")"; });
+
+        bar.append("rect")
+            .attr("x", 1)
+            .attr("width", function(d){
+                var val = x(d.x1) - x(d.x0) - 1;
+                if(val < 0){
+                    return 0;
+                }
+                else{
+                    return val;
+                }
+            })
+            .attr("height", function(d) {
+                var val = height - y(d.length) - 20;
+                if(val < 0){
+                    return 0;
+                }
+                else{
+                    return val;
+                }
+            })
+            .attr("fill", function(d) { return colorScale(d.length) });
+
+        bar.append("text")
+            .attr("dy", ".5em")
+            .attr("y", -12)
+            .attr("x", function(d){ return (x(d.x1) - x(d.x0)) / 2 ;})
+            .attr("text-anchor", "middle")
+            .text(function(d) { return formatCount(d.length); });
+
+        svg2.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + (height - 20) + ")")
+            .call(d3.axisBottom(x));
+    }
+
+
+    dispatch.on("statechange.map", function(d){
+        // redraw heatmap with new points
+        filteredPickupPoints = [];
+        filteredDestinationPoints = [];
+        var startRange = new Date(d[0]);
+        var endRange = new Date(d[1]);
+        var date2 = new Date(rides[0].tpep_pickup_datetime);
+        rides.forEach(function(ride){
+           var rideDate = new Date(ride.tpep_pickup_datetime);
+           if(startRange < rideDate && rideDate < endRange){
+               var puLat = ride.pickup_latitude;
+               var puLon = ride.pickup_longitude;
+               var doLat = ride.dropoff_latitude;
+               var doLon = ride.dropoff_longitude;
+               var pickup_loc = [puLat, puLon];
+               var dropoff_loc = [doLat, doLon];
+               filteredPickupPoints.push(pickup_loc);
+               filteredDestinationPoints.push(dropoff_loc);
+           }
+        });
+        mymap.eachLayer(function(layer){
+            if(layer._heat != null){
+                mymap.removeLayer(layer);
+            }
+        });
+        markers.forEach(function(marker){
+            mymap.removeLayer(marker);
+        });
+        findTopThree(filteredDestinationPoints, "Destination: ");
+        var heat = L.heatLayer(filteredDestinationPoints.concat(filteredPickupPoints), {radius: 15}).addTo(mymap);
+    });
+
+    function brushended() {
+        if (!d3.event.sourceEvent) return; // Only transition after input.
+        if (!d3.event.selection) return; // Ignore empty selections.
+        var d0 = d3.event.selection.map(x.invert),
+            d1 = d0.map(d3.timeDay.round);
+        brushWindowStart = d0[0];
+        brushWindowEnd = d0[1];
+        removeRangeLabels();
+        drawRangeLabels();
+        dispatch.call("statechange", this, d0);
+    }
+
+    function drawRangeLabels(){
+        //label for start value of currently selected range
+        svg.append("g")
+            .attr("class", "brushRangeLabelStart")
+            .attr("transform", "translate(0," + (-20) + ")")
+            .append("text")
+            .text("Start: " + brushWindowStart);
+
+        //label for end value of currently selected range
+        svg.append("g")
+            .attr("class", "brushRangeLabelEnd")
+            .attr("transform", "translate(0," + (-5) + ")")
+            .append("text")
+            .text("End: " + brushWindowEnd);
+    }
+
+    function removeRangeLabels(){
+        svg.select("g.brushRangeLabelStart text").remove();
+        svg.select("g.brushRangeLabelEnd text").remove();
+    }
+
+    // finds top three most frequented locations, type is either "pu" pickup or "do" for dropoff
+    function findTopThree(points, type) {
+        d = {};
+        points.forEach(function (loc) {
+            // round lat lngs to thousandths
+            var loc = [Math.floor(loc[0] * 1000 + 0.5) / 1000, Math.floor(loc[1] * 1000 + 0.5) / 1000];
+            if (d[loc] != null) {
+                d[loc]++;
+            }
+            else {
+                d[loc] = 1;
+            }
+        });
+        d["0,0"] = 0;
+        var first = Number.MIN_VALUE;
+        var firstLoc;
+        var second = Number.MIN_VALUE;
+        var secondLoc;
+        var third = Number.MIN_VALUE;
+        var thirdLoc;
+        var keys = Object.keys(d);
+        keys.forEach(function (key) {
+            if (d[key] > first) {
+                third = second;
+                second = first;
+                first = d[key];
+                var arr = key.split(',');
+                firstLoc = [parseFloat(arr[0]), parseFloat(arr[1])];
+            }
+            else if (d[key] > second) {
+                third = second;
+                second = d[key];
+                var arr = key.split(',');
+                secondLoc = [parseFloat(arr[0]), parseFloat(arr[1])];
+            }
+            else if (d[key] > third) {
+                third = d[key];
+                var arr = key.split(',');
+                thirdLoc = [parseFloat(arr[0]), parseFloat(arr[1])];
+            }
+        });
+        firstLandmark = type;
+        secondLandmark = type;
+        thirdLandmark = type;
+        getLandmark(new google.maps.LatLng(firstLoc[0], firstLoc[1]));
+        getLandmark(new google.maps.LatLng(secondLoc[0], secondLoc[1]));
+        getLandmark(new google.maps.LatLng(thirdLoc[0], thirdLoc[1]));
+    }
+
+    function initialize() {
+        gmap = new google.maps.Map(document.getElementById('gmap'), {
+            center: new google.maps.LatLng(latitude, longitude),
+            zoom: 15
+        });
+    }
+
+    function getLandmark(location){
+        var request = {
+            location: location,
+            radius: '300',
+            //type: ['restaurant']
+        };
+
+        service = new google.maps.places.PlacesService(gmap);
+        service.nearbySearch(request, callback);
+    }
+
+    function callback(results, status) {
+        if (status == google.maps.places.PlacesServiceStatus.OK) {
+            for (var i = 0; i < results.length; i++) {
+                var place = results[i];
+                var loc = place.geometry.location;
+                var latlng = [loc.lat(), loc.lng()];
+                var first = firstLandmark.substring(firstLandmark.indexOf(':') + 2);
+                var second = secondLandmark.substring(secondLandmark.indexOf(':') + 2);
+                var third = thirdLandmark.substring(thirdLandmark.indexOf(':') + 2);
+                if(place.name != "New York" && place.name != first &&
+                    place.name != second && place.name != third){
+                    if(firstLandmark == "Destination: " || firstLandmark == "Pickup: "){
+                        firstLandmark += place.name;
+                        marker1 = L.marker(latlng).addTo(mymap);
+                        marker1.bindPopup("<b>" + firstLandmark + "</b>");
+                        markers.push(marker1);
+                        if(firstLandmark.startsWith("Destination: ")){
+                            document.getElementById("dest1").innerHTML = place.name;
+                        }
+                        else{
+                            document.getElementById("pu1").innerHTML = place.name;
+                        }
+                    }
+                    else if(secondLandmark == "Destination: " || secondLandmark == "Pickup: "){
+                        secondLandmark += place.name;
+                        marker2 = L.marker(latlng).addTo(mymap);
+                        marker2.bindPopup("<b>" + secondLandmark + "</b>");
+                        markers.push(marker2);
+                        if(secondLandmark.startsWith("Destination: ")){
+                            document.getElementById("dest2").innerHTML = place.name;
+                        }
+                        else{
+                            document.getElementById("pu2").innerHTML = place.name;
+                        }
+                    }
+                    else if(thirdLandmark == "Destination: " || thirdLandmark == "Pickup: "){
+                        thirdLandmark += place.name;
+                        marker3 = L.marker(latlng).addTo(mymap);
+                        marker3.bindPopup("<b>" + thirdLandmark + "</b>");
+                        markers.push(marker3);
+                        if(thirdLandmark.startsWith("Destination: ")){
+                            document.getElementById("dest3").innerHTML = place.name;
+                            findTopThree(filteredPickupPoints, "Pickup: ");
+                        }
+                        else{
+                            document.getElementById("pu3").innerHTML = place.name;
+                        }
+                    }
+                }
+            }
+        }
+    }
+</script>
+</html>
