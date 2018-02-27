@@ -151,5 +151,11 @@ https://bl.ocks.org/mbostock/6232537
 http://leafletjs.com/
 https://developers.google.com/maps/documentation/javascript/examples/place-search
 https://getbootstrap.com/
+http://amunategui.github.io/dealing-with-large-files/
+http://genomicsclass.github.io/book/pages/dplyr_tutorial.html
+https://www3.nd.edu/~steve/computing_with_data/24_dplyr/dplyr.html
+https://bl.ocks.org/mbostock/3883245
+https://bl.ocks.org/d3noob/23e42c8f67210ac6c678db2cd07a747e
+
 
 

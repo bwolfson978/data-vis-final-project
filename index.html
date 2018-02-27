@@ -75,8 +75,14 @@
         <div id="timeline"></div>
     </div>
     <div class = "row">
-        <div class="col">
+        <div class="col-6">
             <div id="histogram"></div>
+        </div>
+        <div class="col-3">
+            <div id="tipByHour"></div>
+        </div>
+        <div class="col-3">
+            <div id="paymentByHour"></div>
         </div>
     </div>
 </div>
@@ -95,7 +101,7 @@
     var histData = [];
     var latitude = parseFloat("40.7128");
     var longitude = parseFloat("-74.0059");
-    var mymap = L.map('map').setView([latitude, longitude], 12);
+    var mymap = L.map('map').setView([latitude, longitude], 11)
     L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoiYmFycmV0dHdvbGZzb24iLCJhIjoiY2plMHVjejMwNXYxZTMzcWhkMGt6d3FnNCJ9.6z7LN6FGq91VStpgb9nytw', {
         attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
         maxZoom: 18,
@@ -112,7 +118,7 @@
     var thirdLandmark = "";
 
     // read in csv taxi data
-    var data = "10k-data.csv";
+    var data = "data/100k-data.csv";
     $.get(data, function(data){
         Papa.parse(data, {
             dynamicTyping: true,
@@ -136,11 +142,55 @@
                     var hour = new Date(ride.tpep_pickup_datetime).getHours();
                     histData.push(hour);
                 });
-                var heat = L.heatLayer(points, {radius: 15}).addTo(mymap);
+                var start = new Date("January 1, 2015 00:00:00");
+                var end = new Date ("January 31, 2015 23:59:59");
+                var range = [start, end];
+                console.log(range);
+                dispatch.call("statechange", this, range);
+                //var heat = L.heatLayer(points, {radius: 7}).addTo(mymap);
                 drawHistogram();
             }
         });
     });
+
+    var hourMap = [];
+    var parseTime = d3.timeParse("%m/%d/%Y %H:%M");
+    var hourData = "data/payment_type_and_tip_by_hour_2015.csv";
+    $.get(hourData, function(data){
+        Papa.parse(data, {
+            dynamicTyping: true,
+            header: true,
+            complete: function(results, file){
+                console.log("parsing complete:", results, file);
+                results.data.forEach(function(d){
+                    if(d.tip > 160){
+                        console.log(d)
+                    }
+                    var date = parseTime(d.date);
+                    var hours = date.getHours();
+                    if(hourMap[hours] != null){
+                        hourMap[hours]["n"]++;
+                        hourMap[hours]["total_tip"] += d.tip;
+                        hourMap[hours]["total_freq"] += d.freq;
+                    }
+                    else{
+                        var obj = {
+                            "n" : 1,
+                            "total_tip" : d.tip,
+                            "total_freq" : d.freq
+                        }
+                        hourMap[hours] = obj;
+                    }
+                });
+
+                console.log(hourMap);
+
+                drawTipByHour();
+                drawPaymentTypeByHour();
+            }
+        });
+    });
+
 
     //d3 features
     var margin = {top: 200, right: 40, bottom: 200, left: 40},
@@ -160,12 +210,125 @@
 
     drawTimeline();
 
+    function drawTipByHour(){
+        var svg = d3.select("#tipByHour").append("svg")
+            .attr("width", 300)
+            .attr("height", 350);
+
+        var g = svg.append("g").attr("transform", "translate(" + 25 + "," + 70 + ")");
+        var width = +svg.attr("width") - 50;
+        var height = +svg.attr("height") - 120;
+
+        var x = d3.scaleLinear()
+            .rangeRound([0, width]);
+
+        var y = d3.scaleLinear()
+            .rangeRound([height, 0]);
+
+        var line = d3.line()
+            .x(function(d, i) { return x(i); })
+            .y(function(d) { return y(d.total_tip / d.n); });
+
+        x.domain(d3.extent(hourMap, function(d, i) { return i; }));
+        y.domain(d3.extent(hourMap, function(d) { return d.total_tip / d.n; }));
+
+        g.append("g")
+            .attr("transform", "translate(0," + height + ")")
+            .call(d3.axisBottom(x))
+            .select(".domain")
+            .remove();
+
+        // text label for the x axis
+        g.append("text")
+            .attr("transform",
+                "translate(" + (width/2) + " ," +
+                (height + 30) + ")")
+            .style("text-anchor", "middle")
+            .text("Hour of the Day");
+
+        g.append("g")
+            .call(d3.axisLeft(y))
+            .append("text")
+            .attr("fill", "#000")
+            .attr("transform", "translate(" + 50 + "," + (-20) + ")")
+            .attr("y", 6)
+            .attr("dy", "0.71em")
+            .attr("text-anchor", "end")
+            .text("Average Tip ($)");
+
+        g.append("path")
+            .datum(hourMap)
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-linejoin", "round")
+            .attr("stroke-linecap", "round")
+            .attr("stroke-width", 1.5)
+            .attr("d", line);
+    }
+
+
+    function drawPaymentTypeByHour(){
+        var svg = d3.select("#paymentByHour").append("svg")
+            .attr("width", 300)
+            .attr("height", 350);
+
+        var g = svg.append("g").attr("transform", "translate(" + 25 + "," + 70 + ")");
+        var width = +svg.attr("width") - 50;
+        var height = +svg.attr("height") - 120;
+
+        var x = d3.scaleLinear()
+            .rangeRound([0, width]);
+
+        var y = d3.scaleLinear()
+            .rangeRound([height, 0]);
+
+        var line = d3.line()
+            .x(function(d, i) { return x(i); })
+            .y(function(d) { return y((d.total_freq / d.n)*100); });
+
+        x.domain(d3.extent(hourMap, function(d, i) { return i; }));
+        y.domain(d3.extent(hourMap, function(d) { return (d.total_freq / d.n) *100; }));
+
+        g.append("g")
+            .attr("transform", "translate(0," + height + ")")
+            .call(d3.axisBottom(x))
+            .select(".domain")
+            .remove();
+
+        // text label for the x axis
+        g.append("text")
+            .attr("transform",
+                "translate(" + (width/2) + " ," +
+                (height + 30) + ")")
+            .style("text-anchor", "middle")
+            .text("Hour of the Day");
+
+        g.append("g")
+            .call(d3.axisLeft(y))
+            .append("text")
+            .attr("fill", "#000")
+            .attr("transform", "translate(" + 125 + "," + (-20) + ")")
+            .attr("y", 6)
+            .attr("dy", "0.71em")
+            .attr("text-anchor", "end")
+            .text("Percent rides paid with credit (%)");
+
+        g.append("path")
+            .datum(hourMap)
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-linejoin", "round")
+            .attr("stroke-linecap", "round")
+            .attr("stroke-width", 1.5)
+            .attr("d", line);
+    }
+
     function drawTimeline(){
         svg = d3.select("#timeline").append("svg")
             .attr("width", width + margin.left + margin.right)
             .attr("height", 120)
             .append("g")
-            .attr("transform", "translate(" + margin.left + "," + (40) + ")");
+            .attr("transform", "translate(" + margin.left + "," + (20) + ")");
 
         svg.append("g")
             .attr("class", "axis axis--grid")
@@ -195,8 +358,8 @@
     }
 
     function drawHistogram(){
-        var height = 380;
-        var width = 1200;
+        var height = 305;
+        var width = 600;
         var color = "steelblue";
         var formatCount = d3.format(",.0f");
         var max = d3.max(histData);
@@ -206,7 +369,7 @@
         console.log(width);
         var x = d3.scaleLinear()
             .domain([min, max + 1])
-            .range([0, width/2]);
+            .range([0, width - 100]);
 
         // Generate a histogram using twenty-four uniformly-spaced bins.
         var data = d3.histogram()
@@ -228,9 +391,9 @@
 
         svg2 = d3.select("#histogram").append("svg")
             .attr("width", width)
-            .attr("height", height)
+            .attr("height", height + 100)
             .append("g")
-            .attr("transform", "translate(" + 20 + "," + 0 + ")");
+            .attr("transform", "translate(" + 50 + "," + 0 + ")");
 
         var bar = svg2.selectAll(".bar")
             .data(data)
@@ -250,7 +413,7 @@
                 }
             })
             .attr("height", function(d) {
-                var val = height - y(d.length) - 20;
+                var val = height - y(d.length);
                 if(val < 0){
                     return 0;
                 }
@@ -269,8 +432,26 @@
 
         svg2.append("g")
             .attr("class", "x axis")
-            .attr("transform", "translate(0," + (height - 20) + ")")
+            .attr("transform", "translate(0," + (height) + ")")
             .call(d3.axisBottom(x));
+
+        // text label for the x axis
+        svg2.append("text")
+            .attr("transform",
+                "translate(" + (width/2 - 20) + " ," +
+                (height + 30) + ")")
+            .style("text-anchor", "middle")
+            .text("Hour of the Day");
+
+        svg2.append("g")
+            .call(d3.axisLeft(y))
+            .append("text")
+            .attr("fill", "#000")
+            .attr("transform", "translate(" + 60 + "," + 20 + ")")
+            .attr("y", 6)
+            .attr("dy", "0.71em")
+            .attr("text-anchor", "end")
+            .text("Number of Rides");
     }
 
 
@@ -303,7 +484,7 @@
             mymap.removeLayer(marker);
         });
         findTopThree(filteredDestinationPoints, "Destination: ");
-        var heat = L.heatLayer(filteredDestinationPoints.concat(filteredPickupPoints), {radius: 15}).addTo(mymap);
+        var heat = L.heatLayer(filteredDestinationPoints.concat(filteredPickupPoints), {max: 0.5, radius: 7}).addTo(mymap);
     });
 
     function brushended() {
@@ -315,6 +496,7 @@
         brushWindowEnd = d0[1];
         removeRangeLabels();
         drawRangeLabels();
+        console.log(d0)
         dispatch.call("statechange", this, d0);
     }
 
@@ -322,14 +504,14 @@
         //label for start value of currently selected range
         svg.append("g")
             .attr("class", "brushRangeLabelStart")
-            .attr("transform", "translate(0," + (-20) + ")")
+            .attr("transform", "translate(0," + (-5) + ")")
             .append("text")
             .text("Start: " + brushWindowStart);
 
         //label for end value of currently selected range
         svg.append("g")
             .attr("class", "brushRangeLabelEnd")
-            .attr("transform", "translate(0," + (-5) + ")")
+            .attr("transform", "translate(600," + (-5) + ")")
             .append("text")
             .text("End: " + brushWindowEnd);
     }
@@ -344,7 +526,7 @@
         d = {};
         points.forEach(function (loc) {
             // round lat lngs to thousandths
-            var loc = [Math.floor(loc[0] * 1000 + 0.5) / 1000, Math.floor(loc[1] * 1000 + 0.5) / 1000];
+            var loc = [Math.floor(loc[0] * 10000 + 0.5) / 10000, Math.floor(loc[1] * 10000 + 0.5) / 10000];
             if (d[loc] != null) {
                 d[loc]++;
             }
@@ -398,8 +580,7 @@
     function getLandmark(location){
         var request = {
             location: location,
-            radius: '300',
-            //type: ['restaurant']
+            radius: '500',
         };
 
         service = new google.maps.places.PlacesService(gmap);
