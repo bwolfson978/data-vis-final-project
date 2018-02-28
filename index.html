@@ -74,6 +74,11 @@
     <div class = "row">
         <div id="timeline"></div>
     </div>
+    <div class="row">
+        <div class="col">
+            <h2 class="text-center">Trends in Year 2015</h2>
+        </div>
+    </div>
     <div class = "row">
         <div class="col-6">
             <div id="histogram"></div>
@@ -84,6 +89,9 @@
         <div class="col-3">
             <div id="paymentByHour"></div>
         </div>
+    </div>
+    <div class = "row">
+        <div id="timelineYear"></div>
     </div>
 </div>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCw_Iz7GT1vARXvUJsC1ELZ3Iyz0fa1abA&libraries=places&callback=initialize" async defer></script>
@@ -139,23 +147,19 @@
                         var dropoff_loc = [doLat, doLon];
                         points.push(dropoff_loc);
                     }
-                    var hour = new Date(ride.tpep_pickup_datetime).getHours();
-                    histData.push(hour);
                 });
                 var start = new Date("January 1, 2015 00:00:00");
                 var end = new Date ("January 31, 2015 23:59:59");
                 var range = [start, end];
-                console.log(range);
                 dispatch.call("statechange", this, range);
-                //var heat = L.heatLayer(points, {radius: 7}).addTo(mymap);
-                drawHistogram();
             }
         });
     });
 
     var hourMap = [];
+    var ridesByHour = [];
     var parseTime = d3.timeParse("%m/%d/%Y %H:%M");
-    var hourData = "data/payment_type_and_tip_by_hour_2015.csv";
+    var hourData = "data/data_by_hour_2015.csv";
     $.get(hourData, function(data){
         Papa.parse(data, {
             dynamicTyping: true,
@@ -163,11 +167,17 @@
             complete: function(results, file){
                 console.log("parsing complete:", results, file);
                 results.data.forEach(function(d){
-                    if(d.tip > 160){
-                        console.log(d)
-                    }
-                    var date = parseTime(d.date);
+                    d.date = parseTime(d.date);
+                    ridesByHour.push(d);
+                    var date = d.date;
                     var hours = date.getHours();
+                    var ridesPerHour = d.numRides;
+                    if(histData[hours] != null){
+                        histData[hours] += ridesPerHour;
+                    }
+                    else{
+                        histData[hours] = ridesPerHour;
+                    }
                     if(hourMap[hours] != null){
                         hourMap[hours]["n"]++;
                         hourMap[hours]["total_tip"] += d.tip;
@@ -182,9 +192,8 @@
                         hourMap[hours] = obj;
                     }
                 });
-
-                console.log(hourMap);
-
+                console.log(histData);
+                drawHistogram();
                 drawTipByHour();
                 drawPaymentTypeByHour();
             }
@@ -198,26 +207,34 @@
         height = 680 - margin.top - margin.bottom;
     var svg; //svg used by timeline
     var svg2; //svg used by histogram
+    var svg3; //svg used by year timeline
 
     var x = d3.scaleTime()
         .domain([new Date(2015, 0, 1), new Date(2015, 0, 31) - 1])
         .rangeRound([0, width]);
 
-    var dispatch = d3.dispatch("statechange");
+    var xYear = d3.scaleTime()
+        .domain([new Date(2015, 0, 1), new Date(2015, 11, 31) - 1])
+        .rangeRound([0, width]);
+
+    var dispatch = d3.dispatch("statechange", "yearstatechange");
 
     var brushWindowStart = "";
     var brushWindowEnd = "";
+    var yearBrushWindowStart = "";
+    var yearBrushWindowEnd = "";
 
     drawTimeline();
+    drawTimelineYear();
 
     function drawTipByHour(){
         var svg = d3.select("#tipByHour").append("svg")
             .attr("width", 300)
-            .attr("height", 350);
+            .attr("height", 340);
 
-        var g = svg.append("g").attr("transform", "translate(" + 25 + "," + 70 + ")");
+        var g = svg.append("g").attr("transform", "translate(" + 25 + "," + 65 + ")");
         var width = +svg.attr("width") - 50;
-        var height = +svg.attr("height") - 120;
+        var height = +svg.attr("height") - 100;
 
         var x = d3.scaleLinear()
             .rangeRound([0, width]);
@@ -266,15 +283,14 @@
             .attr("d", line);
     }
 
-
     function drawPaymentTypeByHour(){
         var svg = d3.select("#paymentByHour").append("svg")
             .attr("width", 300)
-            .attr("height", 350);
+            .attr("height", 340);
 
-        var g = svg.append("g").attr("transform", "translate(" + 25 + "," + 70 + ")");
+        var g = svg.append("g").attr("transform", "translate(" + 25 + "," + 65 + ")");
         var width = +svg.attr("width") - 50;
-        var height = +svg.attr("height") - 120;
+        var height = +svg.attr("height") - 100;
 
         var x = d3.scaleLinear()
             .rangeRound([0, width]);
@@ -313,6 +329,7 @@
             .attr("text-anchor", "end")
             .text("Percent rides paid with credit (%)");
 
+        console.log(hourMap);
         g.append("path")
             .datum(hourMap)
             .attr("fill", "none")
@@ -328,7 +345,7 @@
             .attr("width", width + margin.left + margin.right)
             .attr("height", 120)
             .append("g")
-            .attr("transform", "translate(" + margin.left + "," + (20) + ")");
+            .attr("transform", "translate(" + (margin.left + 20)+ "," + (20) + ")");
 
         svg.append("g")
             .attr("class", "axis axis--grid")
@@ -357,30 +374,57 @@
                 .on("end", brushended));
     }
 
+    function drawTimelineYear(){
+        svg3 = d3.select("#timelineYear").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", 120)
+            .append("g")
+            .attr("transform", "translate(" + (margin.left + 20) + "," + (20) + ")");
+
+        svg3.append("g")
+            .attr("class", "axis axis--grid")
+            .attr("transform", "translate(0," + (35) + ")")
+            .call(d3.axisBottom(xYear)
+                .ticks(d3.timeDay)
+                .tickSize(-height/8)
+                .tickFormat(function() { return null; }));
+
+        svg3.append("g")
+            .attr("class", "axis axis--x")
+            .attr("transform", "translate(0," + (35) + ")")
+            .call(d3.axisBottom(xYear)
+                .ticks(d3.timeMonth)
+                .tickFormat(d3.timeFormat("%B"))
+                .tickPadding(0))
+            .selectAll("text")
+            .attr("x", 6);
+
+        drawRangeLabelsYear();
+        svg3.append("g")
+            .attr("class", "brush")
+            .call(d3.brushX()
+                .extent([[0, 0], [width, height/8]])
+                .on("end", yearbrushended));
+    }
+
     function drawHistogram(){
         var height = 305;
         var width = 600;
         var color = "steelblue";
         var formatCount = d3.format(",.0f");
-        var max = d3.max(histData);
-        var min = d3.min(histData);
+        var max = 23;
+        var min = 0;
         console.log("min: " + min);
         console.log("max: " + max);
         console.log(width);
+        console.log(histData);
+
         var x = d3.scaleLinear()
-            .domain([min, max + 1])
+            .domain([min, max])
             .range([0, width - 100]);
 
-        // Generate a histogram using twenty-four uniformly-spaced bins.
-        var data = d3.histogram()
-            .domain(x.domain())
-            .thresholds(x.ticks(24))
-            (histData);
-
-        console.log(data);
-
-        var yMax = d3.max(data, function(d){return d.length});
-        var yMin = d3.min(data, function(d){return d.length});
+        var yMax = d3.max(histData, function(d){return d / 12});
+        var yMin = d3.min(histData, function(d){return d / 12});
         var colorScale = d3.scaleLinear()
             .domain([yMin, yMax])
             .range([d3.rgb(color).brighter(), d3.rgb(color).darker()]);
@@ -391,29 +435,25 @@
 
         svg2 = d3.select("#histogram").append("svg")
             .attr("width", width)
-            .attr("height", height + 100)
+            .attr("height", height + 35)
             .append("g")
             .attr("transform", "translate(" + 50 + "," + 0 + ")");
 
         var bar = svg2.selectAll(".bar")
-            .data(data)
+            .data(histData)
             .enter().append("g")
             .attr("class", "bar")
-            .attr("transform", function(d) { return "translate(" + x(d.x0) + "," + y(d.length) + ")"; });
+            .attr("transform", function(d) { return "translate(" + (0) + "," + y(d /12) + ")"; });
 
         bar.append("rect")
-            .attr("x", 1)
-            .attr("width", function(d){
-                var val = x(d.x1) - x(d.x0) - 1;
-                if(val < 0){
-                    return 0;
-                }
-                else{
-                    return val;
-                }
+            .attr("x", function(d, i){
+                return i * ((width-100)/24 + 1);
+            })
+            .attr("width", function(d, i){
+                return (width-100)/24;
             })
             .attr("height", function(d) {
-                var val = height - y(d.length);
+                var val = height - y(d /12);
                 if(val < 0){
                     return 0;
                 }
@@ -421,14 +461,7 @@
                     return val;
                 }
             })
-            .attr("fill", function(d) { return colorScale(d.length) });
-
-        bar.append("text")
-            .attr("dy", ".5em")
-            .attr("y", -12)
-            .attr("x", function(d){ return (x(d.x1) - x(d.x0)) / 2 ;})
-            .attr("text-anchor", "middle")
-            .text(function(d) { return formatCount(d.length); });
+            .attr("fill", function(d) { return colorScale(d /12) });
 
         svg2.append("g")
             .attr("class", "x axis")
@@ -453,7 +486,6 @@
             .attr("text-anchor", "end")
             .text("Number of Rides");
     }
-
 
     dispatch.on("statechange.map", function(d){
         // redraw heatmap with new points
@@ -500,6 +532,65 @@
         dispatch.call("statechange", this, d0);
     }
 
+    dispatch.on("yearstatechange.graphs", function(d){
+        console.log("heard year state change")
+        filteredHistData = [];
+        filteredHourMap = [];
+        var startRange = new Date(d[0]);
+        var endRange = new Date(d[1]);
+        ridesByHour.forEach(function(ride){
+            var rideDate = ride.date;
+            if(startRange < rideDate && rideDate < endRange){
+                var hour = rideDate.getHours();
+                var i;
+                var ridesPerHour = ride.numRides;
+                if(filteredHistData[hour] != null){
+                    filteredHistData[hour] += ridesPerHour;
+                }
+                else{
+                    filteredHistData[hour] = ridesPerHour;
+                }
+                if(filteredHourMap[hour] != null){
+                    filteredHourMap[hour]["n"]++;
+                    filteredHourMap[hour]["total_tip"] += ride.tip;
+                    filteredHourMap[hour]["total_freq"] += ride.freq;
+                }
+                else{
+                    var obj = {
+                        "n" : 1,
+                        "total_tip" : ride.tip,
+                        "total_freq" : ride.freq
+                    }
+                    filteredHourMap[hour] = obj;
+                }
+            }
+        });
+        console.log(filteredHistData);
+        //redraw histogram, tipbyhour, and paymentbyhour
+        histData = filteredHistData;
+        hourMap = filteredHourMap;
+        //clear histogram
+        d3.select("#histogram").select("svg").remove();
+        //clear tip and payment type graphs
+        d3.select("#paymentByHour").select("svg").remove();
+        d3.select("#tipByHour").select("svg").remove();
+        drawHistogram();
+        drawTipByHour();
+        drawPaymentTypeByHour();
+    });
+
+    function yearbrushended() {
+        if (!d3.event.sourceEvent) return; // Only transition after input.
+        if (!d3.event.selection) return; // Ignore empty selections.
+        var d0 = d3.event.selection.map(xYear.invert),
+            d1 = d0.map(d3.timeDay.round);
+        yearBrushWindowStart = d0[0];
+        yearBrushWindowEnd = d0[1];
+        removeRangeLabelsYear();
+        drawRangeLabelsYear();
+        dispatch.call("yearstatechange", this, d0);
+    }
+
     function drawRangeLabels(){
         //label for start value of currently selected range
         svg.append("g")
@@ -516,9 +607,30 @@
             .text("End: " + brushWindowEnd);
     }
 
+    function drawRangeLabelsYear(){
+        //label for start value of currently selected range
+        svg3.append("g")
+            .attr("class", "brushRangeLabelStartYear")
+            .attr("transform", "translate(0," + (-5) + ")")
+            .append("text")
+            .text("Start: " + yearBrushWindowStart);
+
+        //label for end value of currently selected range
+        svg3.append("g")
+            .attr("class", "brushRangeLabelEndYear")
+            .attr("transform", "translate(600," + (-5) + ")")
+            .append("text")
+            .text("End: " + yearBrushWindowEnd);
+    }
+
     function removeRangeLabels(){
         svg.select("g.brushRangeLabelStart text").remove();
         svg.select("g.brushRangeLabelEnd text").remove();
+    }
+
+    function removeRangeLabelsYear(){
+        svg3.select("g.brushRangeLabelStartYear text").remove();
+        svg3.select("g.brushRangeLabelEndYear text").remove();
     }
 
     // finds top three most frequented locations, type is either "pu" pickup or "do" for dropoff
