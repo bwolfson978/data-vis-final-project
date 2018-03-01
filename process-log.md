@@ -1,6 +1,8 @@
 Project Link:
-
 https://bwolfson978.github.io/DataVisFinal/index.html
+
+Screencast Link:
+https://www.youtube.com/watch?v=aFm-Xe1Lo5c&feature=youtu.be
 
 
 Overview and Motivation
