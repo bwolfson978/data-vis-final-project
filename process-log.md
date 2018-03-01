@@ -1,3 +1,8 @@
+Project Link:
+
+https://bwolfson978.github.io/DataVisFinal/index.html
+
+
 Overview and Motivation
 ---
 This project’s goal is to interactively visualize taxi rides in New York City. Going into the project, I knew I wanted to work on a project with a large dataset. With most of the online examples and weekly homework assignments in school, it’s rare to get a chance to actually wrangle a large dataset. I knew this was a skill necessary for industry and thought it would prove demystifying to try and work with a dataset of hundreds of gigabytes. Plus, I think this is an interesting topic and was hoping it would yield more nuanced insight into the life of people in New York City.
